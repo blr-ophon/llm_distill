@@ -47,13 +47,34 @@ class TrainerDistill(Trainer):
             output_teacher = self.teacher_model(**inputs)
             logits_teacher = output_teacher.logits
 
+        loss_kd = self.forward_KL(logits_student, logits_teacher)
+        loss = self.args.alpha * loss_ce + (1 - self.args.alpha) * loss_kd
+        return (loss, outputs_student) if return_outputs else loss
+
+    def forward_KL(self, student_logits, teacher_logits):
+        """
+        D_kl(P | Q) = sum(P(x)*log(P(x)/Q(x))
+        P is the target distribution, Q is the approximation
+        """
         # nn.KLDivLoss expects inputs as log probabilities and labels as normal
         # probabilities. Loss are averaged over batch dimension.
         kl_div = nn.KLDivLoss(reduction="batchmean")
         loss_kd = self.args.temperature ** 2 * kl_div(
-            F.log_softmax(logits_student / self.args.temperature, dim=-1),
-            F.softmax(logits_teacher / self.args.temperature, dim=-1)
+            F.log_softmax(student_logits / self.args.temperature, dim=-1),
+            F.softmax(teacher_logits / self.args.temperature, dim=-1)
         )
+        return loss_kd
 
-        loss = self.args.alpha * loss_ce + (1 - self.args.alpha) * loss_kd
-        return (loss, outputs_student) if return_outputs else loss
+    def reverse_KL(self, student_logits, teacher_logits):
+        """
+        D_kl(Q | P) = sum(Q(x)*log(Q(x)/P(x))
+        P is the target distribution, Q is the approximation
+        """
+        # nn.KLDivLoss expects inputs as log probabilities and labels as normal
+        # probabilities. Loss are averaged over batch dimension.
+        kl_div = nn.KLDivLoss(reduction="batchmean")
+        loss_kd = self.args.temperature ** 2 * kl_div(
+            F.log_softmax(teacher_logits / self.args.temperature, dim=-1),
+            F.softmax(student_logits / self.args.temperature, dim=-1)
+        )
+        return loss_kd
