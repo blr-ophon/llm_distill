@@ -60,31 +60,28 @@ def distill():
     test_dataset = test_dataset.map(lambda a: tokenize_sample(a, tokenizer), batched=True)
     test_dataset = test_dataset.remove_columns(column_names)
 
-    #print(train_dataset[0])
-    #return
-
     # Training arguments
     training_args = TrainingArgumentsDistill(
         output_dir="distill_qwen",
         overwrite_output_dir=True,
 
         evaluation_strategy="steps",
-        eval_steps=500,                    # Evaluate every 500 steps
-        save_steps=500,                    # Save checkpoint every 500 steps
-        logging_steps=100,                 # Log metrics every 100 steps
+        eval_steps=500,                    # Evaluate every n steps
+        save_steps=500,                    # Save checkpoint every n steps
+        logging_steps=100,                 # Log metrics every n steps
 
         num_train_epochs=5,
         per_device_train_batch_size=4,
         per_device_eval_batch_size=4,
 
-        warmup_steps=500,                  # Helps stabilize training at start
+        warmup_steps=500,
         weight_decay=0.01,
         learning_rate=3e-4,
 
         save_total_limit=2,                # Only keep last 2 checkpoints
         logging_dir="./logs",
 
-        report_to="none",                  # Disable wandb/huggingface logging
+        report_to="none",
         remove_unused_columns=False,
     )
 
