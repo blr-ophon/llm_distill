@@ -30,26 +30,49 @@ class TrainerDistill(Trainer):
         """
         # Get student cross entropy loss (L_ce) and logits
         labels = inputs.get("labels")
-        outputs_student = model(**inputs)
-        logits_student = outputs_student.logits
+        student_outputs = model(**inputs)
+        student_logits = student_outputs.logits
 
         # Cross entropy expects:
         # logits_student: (batch_size*seq_len, vocab_size)
         # labels: (batch_size*seq_len)
         loss_ce = F.cross_entropy(
-            logits_student.view(-1, logits_student.size(-1)),
+            student_logits.view(-1, student_logits.size(-1)),
             labels.view(-1),
             ignore_index=self.tokenizer.pad_token_id
         )
 
         # Get teacher logits
         with torch.no_grad():
-            output_teacher = self.teacher_model(**inputs)
-            logits_teacher = output_teacher.logits
+            teacher_outputs = self.teacher_model(**inputs)
+            teacher_logits = teacher_outputs.logits
 
-        loss_kd = self.forward_KL(logits_student, logits_teacher)
+        loss_kd = self.forward_KL(student_logits, teacher_logits)
         loss = self.args.alpha * loss_ce + (1 - self.args.alpha) * loss_kd
-        return (loss, outputs_student) if return_outputs else loss
+        return (loss, student_outputs) if return_outputs else loss
+
+    def adaptive_kl_loss(self, student_logits, teacher_logits, temperature=1.0, mu=0.5):
+        prob_teacher = F.softmax(teacher_logits / temperature, dim=-1)
+
+        # Max value over vocab for each token in the sequence
+        max_probs_teacher, _ = prob_teacher.max(dim=-1)     # [batch_size, seq_len]
+        flat_max_probs = max_probs_teacher.view(dim=-1)     # [batch_size * seq_len]
+        # Define head tokens (top mu% by teacher confidence)
+        threshold = torch.quantile(flat_max_probs, 1 - mu)
+        head_mask = (max_probs_teacher >= threshold).float()  # 1 for head, 0 for tail
+
+        fwd_kl = self.forward_KL(student_logits, teacher_logits)
+        rev_kl = self.reverse_KL(student_logits, teacher_logits)
+
+        # Compute gaps
+        g_head = (head_mask * fwd_kl).sum()
+        g_tail = ((1 - head_mask) * rev_kl).sum()
+        g_total = g_head + g_tail + 1e-8  # avoid division by zero
+
+        # Weighted AKL loss
+        akl_loss = (g_head / g_total) * fwd_kl.mean() + (g_tail / g_total) * rev_kl.mean()
+
+        return akl_loss
 
     def forward_KL(self, student_logits, teacher_logits):
         """
