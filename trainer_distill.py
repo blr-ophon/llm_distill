@@ -54,7 +54,7 @@ class TrainerDistill(Trainer):
     def adaptive_kl_loss(self, student_logits, teacher_logits, temperature=1.0, mu=0.5):
         prob_teacher = F.softmax(teacher_logits / temperature, dim=-1)
 
-        # Max value over vocab for each token in the sequence
+        # Max value over vocab for each sequence
         max_probs_teacher, _ = prob_teacher.max(dim=-1)     # [batch_size, seq_len]
         flat_max_probs = max_probs_teacher.view(dim=-1)     # [batch_size * seq_len]
         # Define head tokens (top mu% by teacher confidence)

@@ -7,6 +7,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from evaluate import load
 from trainer_distill import TrainingArgumentsDistill, TrainerDistill
+from liger_kernel.transformers import AutoLigerKernelForCausalLM
 
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -40,7 +41,9 @@ def tokenize_sample(sample, tokenizer):
 
 
 def student_init(student_ckpt, config):
-    model = torch.compile(AutoModelForCausalLM.from_pretrained(student_ckpt, config=config))
+    # model = torch.compile(AutoModelForCausalLM.from_pretrained(student_ckpt, config=config))
+    # model = AutoLigerKernelForCausalLM.from_pretrained(student_ckpt, config=config)
+    model = torch.compile(AutoLigerKernelForCausalLM.from_pretrained(student_ckpt, config=config))
     return model.to(device)
 
 
