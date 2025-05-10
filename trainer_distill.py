@@ -39,7 +39,7 @@ class TrainerDistill(Trainer):
         loss_ce = F.cross_entropy(
             student_logits.view(-1, student_logits.size(-1)),
             labels.view(-1),
-            ignore_index=self.tokenizer.pad_token_id
+            ignore_index=self.processing_class.pad_token_id
         )
 
         # Get teacher logits
