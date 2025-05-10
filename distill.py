@@ -4,7 +4,7 @@ import torch
 from transformers import AutoTokenizer, AutoConfig
 from transformers import AutoModelForCausalLM
 from datasets import load_dataset, load_from_disk
-from liger_kernel.transformers import AutoLigerKernelForCausalLM
+from liger_kernel.transformers import apply_liger_kernel_to_qwen2
 # Local imports
 from trainer_distill import TrainingArgumentsDistill, TrainerDistill
 from peft import PeftModel, PeftConfig, get_peft_model
@@ -20,7 +20,7 @@ def distill():
 
     # Load student model
     student_ckpt = "jtromero/qwen2-0.5b-lora-single-device"
-    student_model = student_init_lora(student_ckpt, custom_kernel=False,
+    student_model = student_init_lora(student_ckpt, custom_kernel=True,
                                       compile_model=True)
     student_model = student_model.to(device)
 
@@ -70,9 +70,15 @@ def student_init(student_ckpt, custom_kernel=False, compile_model=False):
 
     # Load base model
     if custom_kernel:
-        model = AutoLigerKernelForCausalLM.from_pretrained(student_ckpt, config=config)
-    else:
-        model = AutoModelForCausalLM.from_pretrained(student_ckpt, config=config)
+        apply_liger_kernel_to_qwen2(
+            rope=True,
+            swiglu=True,
+            cross_entropy=True,
+            fused_linear_cross_entropy=False,
+            rms_norm=False
+        )
+
+    model = AutoModelForCausalLM.from_pretrained(student_ckpt, config=config)
 
     # Compile for performance
     model = torch.compile(model) if compile_model else model
@@ -85,13 +91,20 @@ def student_init_lora(student_ckpt, custom_kernel=False, compile_model=False):
 
     # Load base model
     if custom_kernel:
-        model = AutoLigerKernelForCausalLM.from_pretrained(
-            peft_config.base_model_name_or_path
+        # model = AutoLigerKernelForCausalLM.from_pretrained(
+        #     peft_config.base_model_name_or_path
+        # )
+        apply_liger_kernel_to_qwen2(
+            rope=True,
+            swiglu=True,
+            cross_entropy=True,
+            fused_linear_cross_entropy=False,
+            rms_norm=False
         )
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            peft_config.base_model_name_or_path
-        )
+
+    model = AutoModelForCausalLM.from_pretrained(
+        peft_config.base_model_name_or_path
+    )
 
     # Compile for performance
     model = torch.compile(model) if compile_model else model
